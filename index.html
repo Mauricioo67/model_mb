@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mario Bros — Niveles</title>
+<style>  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #87ceeb;
+    font-family: 'Courier New', Courier, monospace;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;   /* sin pull-to-refresh durante el juego */
+    touch-action: none;          /* el navegador no captura gestos del juego */
+  }
+  #game {
+    position: relative; width: 100%; height: 100%;
+    background: linear-gradient(180deg, #87ceeb 0%, #87ceeb 55%, #90ee90 55%, #7ec850 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* Escenario lógico 800x500 escalado uniformemente a cualquier ventana (letterboxing) */
+  #stage {
+    position: relative;
+    width: 800px; height: 500px;
+    transform-origin: center center;
+    flex: 0 0 auto;
+  }
+  @media (max-width: 700px) {
+    /* En pantallas angostas el HUD pasa abajo para no tapar la acción */
+    #ui { font-size: 12px; }
+  }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+  #ui {
+    position: absolute; top: 10px; left: 10px;
+    color: #fff; font-size: 14px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  #ui b { color: #ffeb3b; }
+
+  /* --- Controles táctiles (co-op): fuera del stage, tamaño real --- */
+  #touchControls { display: none; }
+  html.touch #touchControls {
+    display: flex;
+    position: absolute; inset: 0;
+    pointer-events: none; /* los hijos re-habilitan: el resto deja pasar toques */
+    z-index: 5;
+  }
+  .touchZone {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 14px max(18px, env(safe-area-inset-bottom));
+  }
+  .touchGroup { display: flex; gap: 10px; pointer-events: auto; }
+  .touchBtn {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    font-family: inherit; font-size: 24px; font-weight: bold;
+    line-height: 1;
+    touch-action: none;             /* el navegador no hace scroll/zoom sobre los botones */
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .touchBtn:active { background: rgba(255,255,255,0.25); }
+  .touchBtn.jump { background: rgba(178,34,34,0.5); }
+  .touchBtn.jump:active { background: rgba(255,140,0,0.6); }
+  .touchBtn.p1 { border-color: rgba(255,120,120,0.7); }
+  .touchBtn.p2 { border-color: rgba(140,255,140,0.7); }
+  #pauseBtn {
+    position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right));
+    display: none;
+    padding: 6px 12px;
+    font-family: inherit; font-size: 16px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 8px;
+    color: #fff; cursor: pointer;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 6;
+  }
+  html.touch #pauseBtn { display: block; }
+  /* Overlay de rotación: solo en táctil y con la ventana vertical. La
+     visibilidad la controla la clase hidden desde ui.js (escena 'rotate'). */
+  #rotateScreen { display: none; }
+  @media (orientation: portrait) {
+    html.touch #rotateScreen { display: flex; }
+  }
+  @media (max-width: 700px) {
+    /* Botones generosos: el pulgar no es un mouse */
+    .touchBtn { width: 64px; height: 64px; font-size: 24px; }
+  }
+  #startScreen, #gameOverScreen, #levelCompleteScreen, #winScreen, #pauseScreen, #rotateScreen, #modeSelectionScreen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6);
+    color: #fff; text-align: center; gap: 14px;
+  }
+  #modeSelectionScreen h1 { font-size: 32px; }
+  #modeSelectionScreen .mode-btn {
+    margin: 8px; padding: 16px 32px; font-size: 18px;
+    min-width: 250px;
+  }
+  #modeSelectionScreen .mode-btn.solo {
+    background: #2e7d32; border-color: #66bb6a; color: #fff;
+  }
+  #modeSelectionScreen .mode-btn.coop {
+    background: #1565c0; border-color: #42a5f5; color: #fff;
+  }
+  h1 { font-size: 36px; text-shadow: 2px 2px 0 #b22222; color: #ffeb3b; }
+  p { font-size: 16px; line-height: 1.5; }
+  .btn {
+    padding: 12px 28px; font-size: 18px;
+    font-family: inherit;
+    background: #b22222; color: #ffeb3b;
+    border: 3px solid #ff8c00; border-radius: 6px;
+    cursor: pointer; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 1px;
+    transition: transform 0.1s, background 0.1s;
+  }
+  .btn:hover { transform: scale(1.05); background: #d43a3a; }
+  .btn:active { transform: scale(0.97); }
+  .hidden { display: none !important; }
+  .keyhint { font-size: 12px; color: #ddd; }
+  .screen-hint { font-size: 13px; opacity: 0.85; }
+
+  /* Botón principal generoso en táctil (el pulgar no es un mouse) */
+  html.touch .btn { padding: 16px 42px; font-size: 22px; }
+  html.touch .keyhint { display: none; }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="stage">
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <div><b>P1</b>: A D + W/Espacio (o gamepad 1) · <b>P2</b>: ← → + ↑ (o gamepad 2)</div>
+    <div><b>Monedas</b>: <span id="coins">000</span></div>
+    <div><b>Vidas</b>: <span id="lives">x3</span></div>
+    <div><b>Nivel</b>: <span id="level">1</span></div>
+    <div><b>Puntuación</b>: <span id="score">00000</span></div>
+    <div><b>P1</b>: <span id="power">Pequeño</span> · <b>P2</b>: <span id="power2">Pequeño</span></div>
+    <div><b>High Score</b>: <span id="highScore">00000</span></div>
+  </div>
+
+  <div id="startScreen">
+    <h1>🍄 MARIO BROS 🍄</h1>
+    <p><b>Co-op local:</b> P1 se mueve con A/D y salta con W/Espacio (o gamepad 1).<br>
+    P2 con las flechas (o gamepad 2). Las vidas son compartidas.<br>
+    Salten sobre los enemigos para derribarlos; toquen los bloques<br>
+    para cobrar la flor/champiñón y lleguen a la bandera.</p>
+    <p class="screen-hint">📱 En celular: jugá en horizontal — los controles aparecen en pantalla.</p>
+    <div class="keyhint">Pausa: P</div>
+    <button class="btn" id="startBtn">Jugar</button>
+  </div>
+
+  <div id="gameOverScreen" class="hidden">
+    <h1>💀 GAME OVER</h1>
+    <p>Te quedaste sin vidas. ¡Inténtalo de nuevo!</p>
+    <button class="btn" id="retryBtn">Reintentar</button>
+  </div>
+
+  <div id="levelCompleteScreen" class="hidden">
+    <h1>🎉 ¡NIVEL COMPLETADO!</h1>
+    <p>Puntuación nivel: <span id="levelScore">00000</span><br>
+    Monedas: <span id="levelCoins">00</span><br>
+    Puntuación total: <span id="totalScore">00000</span></p>
+    <button class="btn" id="nextLevelBtn">Siguiente nivel</button>
+  </div>
+
+  <div id="winScreen" class="hidden">
+    <h1>🏆 ¡FELICIDADES!</h1>
+    <p>Completaste todos los niveles.<br>
+    Puntuación final: <span id="finalScore">00000</span></p>
+    <button class="btn" id="playAgainBtn">Jugar de nuevo</button>
+  </div>
+
+  <div id="pauseScreen" class="hidden">
+    <h1>⏸ PAUSA</h1>
+    <p>Juego pausado.<br>Tocá la pantalla o presioná P para reanudar.</p>
+  </div>
+
+  <div id="rotateScreen" class="hidden">
+    <h1>📱 GIRÁ EL TELÉFONO</h1>
+    <p>El juego es horizontal.<br>Giralo para continuar.</p>
+  </div>
+  </div>
+
+  <!-- Controles táctiles co-op FUERA del stage: tamaño real, sin escalado -->
+  <div id="touchControls">
+    <div class="touchZone">
+      <div class="touchGroup">
+        <button class="touchBtn p1" id="p1Left" aria-label="P1 izquierda">◀</button>
+        <button class="touchBtn p1" id="p1Right" aria-label="P1 derecha">▶</button>
+      </div>
+      <div class="touchGroup">
+        <button class="touchBtn p1 jump" id="p1Jump" aria-label="P1 saltar">⬆</button>
+      </div>
+    </div>
+    <div class="touchZone">
+      <div class="touchGroup">
+        <button class="touchBtn p2 jump" id="p2Jump" aria-label="P2 saltar">⬆</button>
+      </div>
+      <div class="touchGroup">
+        <button class="touchBtn p2" id="p2Left" aria-label="P2 izquierda">◀</button>
+        <button class="touchBtn p2" id="p2Right" aria-label="P2 derecha">▶</button>
+      </div>
+    </div>
+  </div>
+  <button id="pauseBtn" aria-label="Pausa">⏸</button>
+</div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

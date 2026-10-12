@@ -1,0 +1,16 @@
+{
+  "name": "mario-bros-arcade",
+  "version": "1.0.0",
+  "description": "Juego arcade tipo Mario Bros — arquitectura modular en ES modules (core / data / lógica)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "start": "node scripts/dev-server.mjs",
+    "test": "node --test test/unit.mjs test/touch.test.mjs test/haptics.test.mjs && node test/run_check.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
